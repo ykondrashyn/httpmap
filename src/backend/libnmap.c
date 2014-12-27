@@ -48,8 +48,32 @@ int go_parse_string(char *pFile) {
 
 	pch = strtok (pFile,"\n");
 	while (pch != NULL) {
-		printf ("Checking ip -> %s <- with nmap..\n",pch);
+		printf("Checking ip -> %s <- with nmap..\n", pch);
+		nmap_start(pch, "80,8080,8000");
 		pch = strtok (NULL, "\n");
 	}
 	return SUCCESS;
 }
+
+int nmap_start(const char *ipaddr, const char *port_list) {
+
+	char buf[1024]				= {0};
+	char nmap_param_list[255]	= {0};
+
+	FILE *fd = NULL;
+	
+	snprintf(nmap_param_list, sizeof(nmap_param_list), "nmap -p %s --open -oG - %s", port_list, ipaddr);
+	fd = popen(nmap_param_list, "r");
+	if (fd) {
+		while (fgets(buf, sizeof(buf), fd)) {
+			if (strstr(buf, "Ports")) {
+				printf("%s", buf);
+			}
+		}
+	} else {
+		return ERROR;
+	}
+
+	return SUCCESS;
+}
+
