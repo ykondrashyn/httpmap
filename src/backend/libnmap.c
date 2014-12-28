@@ -113,7 +113,7 @@ int nmap_get_ip_and_port(char *buf) {
 	char port_to_check[20]		= {0};
 
 	if (strchr(buf, '(')) {		/* Just in case */
-	/* obtaining the ip address */
+		/* obtaining the ip address */
 		int ip_length = strchr(buf, '(') - (buf + 6) - 1;
 		memcpy(ip_to_check, buf + 6, ip_length);
 		ip_to_check[ip_length] = 0;
@@ -211,7 +211,7 @@ int nmap_web_server_check(char *ip, char *port_str) {
 		strstr(buf, "Ok") ||
 		strstr(buf, "ok") ||
 		strstr(buf, "200")) {
-		printf("===============> IP: %s, PORT: %d\n", ip, port);
+		printf("===============> %s:%d\n", ip, port);
 		}
 
 	close(sock);
