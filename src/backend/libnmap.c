@@ -12,6 +12,9 @@
 #define ERROR		1
 #define SUCCESS		0
 
+/************************************************************************************/
+/*				 Loads pull of ip addresses from the selected file					*/
+/************************************************************************************/
 char *read_ip_pull(const char *file) {
 
 	int size = 0;
@@ -41,10 +44,16 @@ char *read_ip_pull(const char *file) {
 	}
 }
 
+/************************************************************************************/
+/*							Releases pull of ip addresses							*/
+/************************************************************************************/
 void release_ip_pull(char *pull) {
 	free(pull);
 }
 
+/************************************************************************************/
+/* Parses all the strings of ip addresses in pull and starts nmap process for them  */
+/************************************************************************************/
 int go_parse_string(char *pFile) {
 
 	char *pch = NULL;
@@ -53,12 +62,15 @@ int go_parse_string(char *pFile) {
 	pch = strtok (pFile,"\n");
 	while (pch != NULL) {
 		printf("Checking ip -> %s <- with nmap..\n", pch);
-		nmap_start(pch, "80,8080,8000");
+		nmap_start(pch, "80,8080,8000");	/* port list by default */
 		pch = strtok (NULL, "\n");
 	}
 	return SUCCESS;
 }
 
+/************************************************************************************/
+/*				Starts nmap process with selected IP address and port				*/
+/************************************************************************************/
 int nmap_start(const char *ipaddr, const char *port_list) {
 
 	char buf[1024]				= {0};
@@ -70,8 +82,7 @@ int nmap_start(const char *ipaddr, const char *port_list) {
 	fd = popen(nmap_param_list, "r");
 	if (fd) {
 		while (fgets(buf, sizeof(buf), fd)) {
-			if (strstr(buf, "open/")) {
-//				printf("buf: %s", buf);
+			if (strstr(buf, "open/")) {			/* if nmap's output contains "open/" byte sequence, we should process detailed parsing*/
 				nmap_get_ip_and_port(buf);
 			}
 		}
@@ -84,19 +95,32 @@ int nmap_start(const char *ipaddr, const char *port_list) {
 	return SUCCESS;
 }
 
+/************************************************************************************/
+/*				 Parsing of ip address and port from incoming buffer				*/
+/************************************************************************************/
+/*							PLEASE PAY YOUR ATTENTION!								*/
+/* The code below is Linux dependent parsing code for nmap utility (6.40 version)	*/
+/* Here I assume that the version dependent output will be remain in the same format*/
+/* The output of nmap command I use is following:									*/
+/*----------------------------------------------------------------------------------*/
+/* Host: 109.108.72.75 (109-108-72-75.kievnet.com.ua)	Ports: 80/open/tcp//http///	Ignored State: filtered (2) */
+/* Host: 109.108.72.20 (109-108-72-20.kievnet.com.ua)	Ports: 80/open/tcp//http///, 443/open/tcp//https///, 3389/open/tcp//ms-wbt-server///	Ignored State: filtered (7) */
+/************************************************************************************/
+
 int nmap_get_ip_and_port(char *buf) {
 
 	char ip_to_check[20]		= {0};
 	char port_to_check[20]		= {0};
-	if (strchr(buf, '(')) {
-		/* obtaining the ip address */
+
+	if (strchr(buf, '(')) {		/* Just in case */
+	/* obtaining the ip address */
 		int ip_length = strchr(buf, '(') - (buf + 6) - 1;
 		memcpy(ip_to_check, buf + 6, ip_length);
 		ip_to_check[ip_length] = 0;
 
 		/********************************************************************************/
-		/* Obtaining the port															*/
-		/* Please note, that we CAN have multiple port values for one IP address		*/
+		/* Obtaining the ports															*/
+		/* Please note, that we can have multiple port values for one IP address		*/
 		/* Such we should check them all												*/
 		/********************************************************************************/
 
@@ -110,16 +134,13 @@ int nmap_get_ip_and_port(char *buf) {
 		memcpy(port_to_check, _ptr, port_length);
 		port_to_check[port_length] = 0;
 
-//		printf("IP: %s, PORT: %s\n", ip_to_check, port_to_check);
 		nmap_web_server_check(ip_to_check, port_to_check);	/* web server check for the first port */
-//		nmap_web_server_check("ya.ru", "80");	/* web server check for the first port */
 
 		/* Another port values are comma separated */
 		while ((pch = strchr(_ptr, ',')) != NULL) {
 			port_length = strchr(pch, '/') - (pch + 2);
 			memcpy(port_to_check, pch + 2, port_length);
-//			printf("\t\t\tPORT: %s\n", port_to_check);
-//			nmap_web_server_check(ip_to_check, port_to_check);	/* web server check for the another ports */
+			nmap_web_server_check(ip_to_check, port_to_check);	/* web server check for the another ports */
 			_ptr = pch + 1;
 		}
 
@@ -142,10 +163,12 @@ int nmap_web_server_check(char *ip, char *port_str) {
 
 	port = (int)strtol(port_str, NULL, 10);
 
-	printf("IP: %s, PORT: %d\n", ip, port);
+	/* Comment/uncomment it for debug purposes */
+//	printf("IP: %s, PORT: %d\n", ip, port);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
+		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
 		return ERROR;
 	}
 
@@ -157,7 +180,7 @@ int nmap_web_server_check(char *ip, char *port_str) {
 
 	/* connect: create a connection with the server */
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-		printf("Connect error:%s\n", strerror(errno));
+		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
 		return ERROR;
 	}
 
@@ -166,6 +189,7 @@ int nmap_web_server_check(char *ip, char *port_str) {
 	/* send the message line to the server */
 	num_bytes = write(sock, buf, strlen(buf));
 	if (num_bytes < 0) {
+		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
 		return ERROR;
 	}
 
@@ -177,6 +201,7 @@ int nmap_web_server_check(char *ip, char *port_str) {
 	buf[0] = 0;
 	num_bytes = read(sock, buf, sizeof(buf));
 	if (num_bytes < 0) {
+		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
 		return ERROR;
 	}
 
@@ -186,7 +211,7 @@ int nmap_web_server_check(char *ip, char *port_str) {
 		strstr(buf, "Ok") ||
 		strstr(buf, "ok") ||
 		strstr(buf, "200")) {
-		printf("===============> IP: %s\n", ip);
+		printf("===============> IP: %s, PORT: %d\n", ip, port);
 		}
 
 	close(sock);
