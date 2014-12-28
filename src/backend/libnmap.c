@@ -154,34 +154,51 @@ int nmap_get_ip_and_port(char *buf) {
 
 int nmap_web_server_check(char *ip, char *port_str) {
 
-	int sock			= 0;
-	int port			= 0;
-	int num_bytes		= 0;
-	char buf[1024]		= {0};
+	int sock            = 0;
+	int port            = 0;
+	int num_bytes       = 0;
+	char buf[1024]      = {0};
+
+	fd_set fdset;
+	struct timeval tv;
 
 	struct sockaddr_in serv_addr;
 
 	port = (int)strtol(port_str, NULL, 10);
 
 	/* Comment/uncomment it for debug purposes */
-//	printf("IP: %s, PORT: %d\n", ip, port);
+	//  printf("IP: %s, PORT: %d\n", ip, port);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
 		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
 		return ERROR;
 	}
+	fcntl(sock, F_SETFL, O_NONBLOCK);
 
 	/* build the server's Internet address */
 	memset(&serv_addr, 0, sizeof(serv_addr));
-	serv_addr.sin_port			= htons(port);
-	serv_addr.sin_family		= AF_INET;
-	serv_addr.sin_addr.s_addr	= inet_addr(ip);
+	serv_addr.sin_port          = htons(port);
+	serv_addr.sin_family        = AF_INET;
+	serv_addr.sin_addr.s_addr   = inet_addr(ip);
 
 	/* connect: create a connection with the server */
-	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
-		return ERROR;
+	connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+
+	FD_ZERO(&fdset);
+	FD_SET(sock, &fdset);
+	tv.tv_sec = 3;
+	tv.tv_usec = 0;
+	if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1) {
+		int so_error;
+		socklen_t len = sizeof(so_error);
+
+		getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+
+		if (so_error != 0) {
+			printf("Error connecting to %s, skipping..\n", ip);
+			return ERROR;
+		}
 	}
 
 	snprintf(buf, sizeof(buf), "GET / HTTP/1.0\r\n\r\n");
@@ -190,29 +207,37 @@ int nmap_web_server_check(char *ip, char *port_str) {
 	num_bytes = write(sock, buf, strlen(buf));
 	if (num_bytes < 0) {
 		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
+		close(sock);
 		return ERROR;
 	}
-
-	struct timeval tv;
-	tv.tv_sec = 1;
-	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 
 	/* print the server's reply */
-	buf[0] = 0;
-	num_bytes = read(sock, buf, sizeof(buf));
-	if (num_bytes < 0) {
-		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
+	if (select(sock + 1, &fdset, NULL, NULL, &tv) == 1) {
+		if (FD_ISSET(sock, &fdset)) {
+			/* receiving */
+			buf[0] = 0;
+			num_bytes = read(sock, buf, sizeof(buf));
+			if (num_bytes < 0) {
+				printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
+				close(sock);
+				return ERROR;
+			}
+
+			/* PLEASE PAY YOUR ATTENTION! */
+			/* The code below should be tested as well as we can */
+			if (strstr(buf, "OK") ||
+					strstr(buf, "Ok") ||
+					strstr(buf, "ok") ||
+					strstr(buf, "200")) {
+				printf("===============> %s:%d\n", ip, port);
+			}
+
+		}
+	} else {
+		printf("Receiving timeout, skipping..\n");
 		return ERROR;
 	}
-
-/* PLEASE PAY YOUR ATTENTION! */
-/* The code below should be tested as well as we can */
-	if (strstr(buf, "OK") || 
-		strstr(buf, "Ok") ||
-		strstr(buf, "ok") ||
-		strstr(buf, "200")) {
-		printf("===============> %s:%d\n", ip, port);
-		}
 
 	close(sock);
 }
+
