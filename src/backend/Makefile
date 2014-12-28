@@ -21,6 +21,7 @@ libnmap: $(LIB_TARGET_NAME).c
 	@echo "==================="
 	gcc -c $(LIB_TARGET_NAME).c -fPIC
 	gcc -shared $(LIB_TARGET_NAME).o -o $(LIB_TARGET_NAME).so
+	ln -fs $(shell pwd)/$(LIB_TARGET_NAME).so /lib
 
 sample_nmap: $(TARGET_NAME).c
 	@echo "==================="
