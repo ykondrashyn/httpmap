@@ -229,6 +229,9 @@ int nmap_web_server_check(char *ip, char *port_str) {
 					strstr(buf, "Ok") ||
 					strstr(buf, "ok") ||
 					strstr(buf, "200")) {
+				char log_cmd[255] = {0};
+				snprintf(log_cmd, sizeof(log_cmd), "echo %s:%d >> log_file", ip, port);
+				system(log_cmd);
 				printf("===============> %s:%d\n", ip, port);
 			}
 

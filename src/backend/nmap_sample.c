@@ -5,7 +5,7 @@
 #include "nmap.h"
 
 int main(void) {
-	char *res = read_ip_pull("/home/stanislav/Projects/httpmap/scan.txt");
+	char *res = read_ip_pull("../../scan.txt");
 	go_parse_string(res);
 	return 0;
 }
