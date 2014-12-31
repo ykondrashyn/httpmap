@@ -3,9 +3,13 @@
 
 char	*read_ip_pull					(const char *file);
 void	release_ip_pull					(char *pull);
-int		nmap_start						(const char *ipaddr, const char *port_list);
-int		nmap_get_ip_and_port			(char *buf);
-int		nmap_web_server_check			(char *ip, char *port_str);
-int		go_parse_string					(char *pFile);
+
+char	*read_filter					(const char *file);
+void	release_filter					(char *filter);
+
+int		nmap_start						(const char *ipaddr, const char *port_list, char *filter_only, char *filter_rej);
+int		nmap_get_ip_and_port			(char *buf, char *filter_only, char *filter_rej);
+int		nmap_web_server_check			(char *ip, char *port_str, char *filter_only, char *filter_rej);
+int		go_parse_string					(char *pFile, char *filter_only, char *filter_rej);
 
 #endif /* _NMAP_H_ */

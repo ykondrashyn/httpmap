@@ -9,8 +9,12 @@
 
 #include "nmap.h"
 
-#define ERROR		1
-#define SUCCESS		0
+#define TRUE				1
+#define FALSE				0
+#define ERROR				1
+#define SUCCESS				0
+#define MAX_FILTER_LEN		255
+#define MAX_DIAPASONE_LEN	20
 
 /************************************************************************************/
 /*				 Loads pull of ip addresses from the selected file					*/
@@ -21,21 +25,62 @@ char *read_ip_pull(const char *file) {
 	int offset = 0;
 	char *result = NULL;
 	FILE *fd = fopen(file, "r");
+
 	if (fd) {
 		/* getting size of file */
 		fseek(fd, 0, SEEK_END);
 		size = ftell(fd);
+
+		if (!size)
+			return NULL;
+
 		fseek(fd, 0, SEEK_SET);
 
 		/* allocating the resources */
 		result = (char *)malloc(size);
 		if (result) {
 
-			while (fgets(result + offset, 20, fd)) {
+			while (fgets(result + offset, MAX_DIAPASONE_LEN, fd)) {
 				offset = strlen(result);
 			}
 		}
 
+		fclose(fd);
+		return result;
+
+	} else {
+		printf("An error has been occurred while opening the '%s'\n", file);
+		return NULL;
+	}
+}
+
+char *read_filter(const char *file) {
+
+	int size = 0;
+	int offset = 0;
+	char *result = NULL;
+	FILE *fd = fopen(file, "r");
+
+	if (fd) {
+		/* getting size of file */
+		fseek(fd, 0, SEEK_END);
+		size = ftell(fd);
+
+		if (!size)
+			return NULL;
+
+		fseek(fd, 0, SEEK_SET);
+
+		/* allocating the resources */
+		result = (char *)malloc(size);
+		if (result) {
+
+			while (fgets(result + offset, MAX_FILTER_LEN, fd)) {
+				offset = strlen(result);
+			}
+		}
+
+		fclose(fd);
 		return result;
 
 	} else {
@@ -52,18 +97,25 @@ void release_ip_pull(char *pull) {
 }
 
 /************************************************************************************/
-/* Parses all the strings of ip addresses in pull and starts nmap process for them  */
+/*							Releases allocated filter								*/
 /************************************************************************************/
-int go_parse_string(char *pFile) {
+void release_filter(char *filter) {
+	free(filter);
+}
+
+/************************************************************************************/
+/* Parses all the strings of ip addresses in pull and starts 'nmap' process for them  */
+/************************************************************************************/
+int go_parse_string(char *pFile, char *filter_only, char *filter_rej) {
 
 	char *pch = NULL;
 	char *string = NULL;
 
-	pch = strtok (pFile,"\n");
-	while (pch != NULL) {
-		printf("Checking ip -> %s <- with nmap..\n", pch);
-		nmap_start(pch, "80,8080,8000");	/* port list by default */
-		pch = strtok (NULL, "\n");
+	pch = strtok(pFile,"\n");
+	while (pch) {
+		printf("Checking ip diapasone: %s with nmap..\n", pch);
+		nmap_start(pch, "80,8080,8000", filter_only, filter_rej);	/* port list by default */
+		pch = strtok(NULL, "\n");
 	}
 	return SUCCESS;
 }
@@ -71,7 +123,7 @@ int go_parse_string(char *pFile) {
 /************************************************************************************/
 /*				Starts nmap process with selected IP address and port				*/
 /************************************************************************************/
-int nmap_start(const char *ipaddr, const char *port_list) {
+int nmap_start(const char *ipaddr, const char *port_list, char *filter_only, char *filter_rej) {
 
 	char buf[1024]				= {0};
 	char nmap_param_list[255]	= {0};
@@ -83,7 +135,7 @@ int nmap_start(const char *ipaddr, const char *port_list) {
 	if (fd) {
 		while (fgets(buf, sizeof(buf), fd)) {
 			if (strstr(buf, "open/")) {			/* if nmap's output contains "open/" byte sequence, we should process detailed parsing*/
-				nmap_get_ip_and_port(buf);
+				nmap_get_ip_and_port(buf, filter_only, filter_rej);
 			}
 		}
 	} else {
@@ -107,7 +159,7 @@ int nmap_start(const char *ipaddr, const char *port_list) {
 /* Host: 109.108.72.20 (109-108-72-20.kievnet.com.ua)	Ports: 80/open/tcp//http///, 443/open/tcp//https///, 3389/open/tcp//ms-wbt-server///	Ignored State: filtered (7) */
 /************************************************************************************/
 
-int nmap_get_ip_and_port(char *buf) {
+int nmap_get_ip_and_port(char *buf, char *filter_only, char *filter_rej) {
 
 	char ip_to_check[20]		= {0};
 	char port_to_check[20]		= {0};
@@ -134,13 +186,13 @@ int nmap_get_ip_and_port(char *buf) {
 		memcpy(port_to_check, _ptr, port_length);
 		port_to_check[port_length] = 0;
 
-		nmap_web_server_check(ip_to_check, port_to_check);	/* web server check for the first port */
+		nmap_web_server_check(ip_to_check, port_to_check, filter_only, filter_rej);	/* web server check for the first port */
 
 		/* Another port values are comma separated */
 		while ((pch = strchr(_ptr, ',')) != NULL) {
 			port_length = strchr(pch, '/') - (pch + 2);
 			memcpy(port_to_check, pch + 2, port_length);
-			nmap_web_server_check(ip_to_check, port_to_check);	/* web server check for the another ports */
+			nmap_web_server_check(ip_to_check, port_to_check, filter_only, filter_rej);	/* web server check for the another ports */
 			_ptr = pch + 1;
 		}
 
@@ -152,7 +204,7 @@ int nmap_get_ip_and_port(char *buf) {
 	return SUCCESS;
 }
 
-int nmap_web_server_check(char *ip, char *port_str) {
+int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *filter_rej) {
 
 	int sock            = 0;
 	int port            = 0;
@@ -229,10 +281,14 @@ int nmap_web_server_check(char *ip, char *port_str) {
 					strstr(buf, "Ok") ||
 					strstr(buf, "ok") ||
 					strstr(buf, "200")) {
-				char log_cmd[255] = {0};
-				snprintf(log_cmd, sizeof(log_cmd), "echo %s:%d >> log_file", ip, port);
-				system(log_cmd);
-				printf("===============> %s:%d\n", ip, port);
+				if (is_allowed(buf, filter_only, filter_rej)) {
+					char log_cmd[255] = {0};
+					snprintf(log_cmd, sizeof(log_cmd), "echo %s:%d >> log_file", ip, port);
+					system(log_cmd);
+					printf("===============> %s:%d\n", ip, port);
+				} else {
+					printf("IP %s rejected!\n", ip);
+				}
 			}
 
 		}
@@ -244,3 +300,53 @@ int nmap_web_server_check(char *ip, char *port_str) {
 	close(sock);
 }
 
+int is_allowed(const char *buf, char *filter_only, char *filter_rej) {
+
+	int res						= 0;
+	int offset					= 0;
+	int allowed					= FALSE;		/* is everything OK? */
+	int only_allowed			= FALSE;
+	int rej_allowed				= FALSE;
+	char word[MAX_FILTER_LEN]	= {0};
+
+	if (filter_only) {
+		/* searching needed */
+		while ((res = sscanf(filter_only + offset, "%s", word)) != -1) {
+			offset += strlen(word) + 1;
+			if (word && word[0] != '#' && (strlen(word) > 2)) {		/* if it is not comment */
+				if (strstr(buf, word)) {							/* if we've found at least one needed word */
+					only_allowed = 1;
+//					printf("-> needed found!\n");
+					break;
+				} else {
+					only_allowed = 0;
+				}
+			}
+		}
+	} else {
+		only_allowed = 1;
+	}
+
+	offset = 0;
+	if (filter_rej) {
+		/* searching rejected */
+		while ((res = sscanf(filter_rej + offset, "%s", word)) != -1) {
+			offset += strlen(word) + 1;
+			if (word && word[0] != '#' && (strlen(word) > 2)) {		/* if it is not comment */
+				if (strstr(buf, word)) {							/* if we've found at least one needed word */
+					rej_allowed = 0;
+//					printf("rejected found on word >%s<, block..\n", word);
+					break;
+				} else {
+					rej_allowed = 1;
+				}
+			}
+		}
+	}
+
+//	printf("only %d rej %d\n", only_allowed, rej_allowed);
+	if (rej_allowed && only_allowed)
+		allowed = 1;
+
+	return (filter_only || filter_rej) ? allowed : TRUE;
+}
