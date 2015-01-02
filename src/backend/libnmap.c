@@ -7,14 +7,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-#include "nmap.h"
-
-#define TRUE				1
-#define FALSE				0
-#define ERROR				1
-#define SUCCESS				0
-#define MAX_FILTER_LEN		255
-#define MAX_DIAPASONE_LEN	20
+#include "libnmap.h"
 
 /************************************************************************************/
 /*				 Loads pull of ip addresses from the selected file					*/
@@ -49,7 +42,7 @@ char *read_ip_pull(const char *file) {
 		return result;
 
 	} else {
-		printf("An error has been occurred while opening the '%s'\n", file);
+		ERR_PRINT("An error has been occurred while opening the '%s'\n", file);
 		return NULL;
 	}
 }
@@ -84,7 +77,7 @@ char *read_filter(const char *file) {
 		return result;
 
 	} else {
-		printf("An error has been occurred while opening the '%s'\n", file);
+		ERR_PRINT("An error has been occurred while opening the '%s'\n", file);
 		return NULL;
 	}
 }
@@ -197,7 +190,7 @@ int nmap_get_ip_and_port(char *buf, char *filter_only, char *filter_rej) {
 		}
 
 	} else {
-		printf("An error has been occured: invalid nmap version\n");
+		ERR_PRINT("An error has been occured: invalid nmap version\n");
 		return ERROR;
 	}
 
@@ -209,7 +202,7 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 	int sock            = 0;
 	int port            = 0;
 	int num_bytes       = 0;
-	char buf[1024]      = {0};
+	char buf[4096]      = {0};
 
 	fd_set fdset;
 	struct timeval tv;
@@ -218,12 +211,9 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 
 	port = (int)strtol(port_str, NULL, 10);
 
-	/* Comment/uncomment it for debug purposes */
-	//  printf("IP: %s, PORT: %d\n", ip, port);
-
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
-		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
+		ERR_PRINT("Failed to create socket\n");
 		return ERROR;
 	}
 	fcntl(sock, F_SETFL, O_NONBLOCK);
@@ -248,7 +238,8 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 		getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
 
 		if (so_error != 0) {
-			printf("Error connecting to %s, skipping..\n", ip);
+			DBG_PRINT("Connection was unsuccessful\n");
+			close(sock);
 			return ERROR;
 		}
 	}
@@ -258,7 +249,7 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 	/* send the message line to the server */
 	num_bytes = write(sock, buf, strlen(buf));
 	if (num_bytes < 0) {
-		printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
+		DBG_PRINT("Send data error\n");
 		close(sock);
 		return ERROR;
 	}
@@ -270,7 +261,7 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 			buf[0] = 0;
 			num_bytes = read(sock, buf, sizeof(buf));
 			if (num_bytes < 0) {
-				printf("An error has been occurred in %s(), line #%d: %s\n", __FUNCTION__, __LINE__, strerror(errno));
+				DBG_PRINT("Receive data error\n");
 				close(sock);
 				return ERROR;
 			}
@@ -287,13 +278,14 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 					system(log_cmd);
 					printf("===============> %s:%d\n", ip, port);
 				} else {
-					printf("IP %s rejected!\n", ip);
+					DBG_PRINT("IP %s rejected!\n", ip);
 				}
 			}
 
 		}
 	} else {
-		printf("Receiving timeout, skipping..\n");
+		DBG_PRINT("Receiving timeout, skipping..\n");
+		close(sock);
 		return ERROR;
 	}
 

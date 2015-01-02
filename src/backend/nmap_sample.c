@@ -3,7 +3,7 @@
 #include <string.h>
 #include <getopt.h>
 
-#include "nmap.h"
+#include "libnmap.h"
 
 int main(int argc, char **argv) {
 
