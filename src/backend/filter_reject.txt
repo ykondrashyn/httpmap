@@ -1,5 +1,10 @@
 microtik
 Microtik
+RouterOS
+AirOS
+airos
+airOS
+AIRos
 Huawei
 huawei
 Icecast
@@ -10,6 +15,25 @@ Dir
 DIR
 Dlink
 ddwrt
+dd-wrt
+DD-WRT
 openwrt
+OpenWrt
 ISS
-
+it works!
+It works!
+it worked!
+It worked!
+Roundcube
+Webmail
+Qnap
+QNAP
+qnap
+AirTies
+airties
+This Program Can Only Be Run On Windows
+Welcome to nginx
+Supermicro
+Supermicra
+linksys
+Linksys
