@@ -274,7 +274,11 @@ int nmap_web_server_check(char *ip, char *port_str, char *filter_only, char *fil
 					strstr(buf, "200")) {
 				if (is_allowed(buf, filter_only, filter_rej)) {
 					char log_cmd[255] = {0};
-					snprintf(log_cmd, sizeof(log_cmd), "echo %s:%d >> log_file", ip, port);
+					if (strstr(buf, "WWW-Authenticate: Basic")) {
+						snprintf(log_cmd, sizeof(log_cmd), "echo %s:%d >> auth_file", ip, port);
+					} else {
+						snprintf(log_cmd, sizeof(log_cmd), "echo %s:%d >> log_file", ip, port);
+					}
 					system(log_cmd);
 					printf("===============> %s:%d\n", ip, port);
 				} else {
