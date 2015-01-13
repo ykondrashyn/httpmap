@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <jansson.h>
@@ -92,6 +93,7 @@ error:
 }
 
 int main(int argc, char *argv[]) {
+    FILE *fd;
     size_t i,j;
     char *text;
     char url[URL_SIZE];
@@ -177,7 +179,18 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf("%s %s\n", argv[1], strval);    
+    if(strval) {
+        printf("Found value '%s' in %s\nATTR: %s\n", argv[2], argv[1], strval);
+        fd = fopen("log.txt","w");
+        if(fd != NULL) {
+            fputs (argv[1], fd);
+            fputc ('\n', fd);
+            fclose (fd);
+        }
+        else
+            fprintf(stderr, "Error opening file");
+
+    }
     json_decref(root);
     return 0;
 }
